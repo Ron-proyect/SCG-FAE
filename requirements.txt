@@ -1,0 +1,9 @@
+streamlit
+pandas
+plotly
+fpdf2
+matplotlib
+docxtpl
+extra-streamlit-components
+supabase
+openpyxl
