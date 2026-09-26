@@ -36,29 +36,83 @@ CASOS_FILE = "casos.csv"
 ENTREGAS_FILE = "entregas.csv"
 LISTA_ESPERA_FILE = "lista_espera.csv"
 SIS_HTML_FILE = "analitica_sis.html"
+DUPLAS_FILE = "duplas.csv" 
 
-# Diccionario de Credenciales (Actualizado: Alan Zamora)
+# Diccionario de Credenciales
 CREDENTIALS = {
     "admin": {"pass": "cerrillos2026", "role": "admin", "name": "Administrador"},
-    "bruno.diaz": {"pass": "fae.cerrillos", "role": "user", "name": "Bruno Diaz-Casandra Mora"},
-    "daniela.paula": {"pass": "fae.cerrillos", "role": "user", "name": "Daniela Izquierdo-Paula Leyton"},
-    "francisca.tiare": {"pass": "fae.cerrillos", "role": "user", "name": "Francisca Salazar-Tiare Riquelme"},
-    "laura.alan": {"pass": "fae.cerrillos", "role": "user", "name": "Laura Arancibia-Alan Zamora"},
-    "maida.valeria": {"pass": "fae.cerrillos", "role": "user", "name": "Maida Muñoz-Valeria Orellana"},
-    "marcelo.maria": {"pass": "fae.cerrillos", "role": "user", "name": "Marcelo Huento-María Constanza Correa"},
-    "solange.francisco": {"pass": "fae.cerrillos", "role": "user", "name": "Solange Alegría-Francisco Carvajal"}
+    "bruno.diaz": {"pass": "fae.cerrillos", "role": "user", "name": "Bruno Diaz-Ignacia Ahumada", "dupla": "Dupla 1"},
+    "daniela.paula": {"pass": "fae.cerrillos", "role": "user", "name": "Daniela Izquierdo-Paula Leyton", "dupla": "Dupla 2"},
+    "francisca.tiare": {"pass": "fae.cerrillos", "role": "user", "name": "Francisca Salazar-Tiare Riquelme", "dupla": "Dupla 3"},
+    "laura.alan": {"pass": "fae.cerrillos", "role": "user", "name": "Laura Arancibia-Alan Zamora", "dupla": "Dupla 4"},
+    "maida.valeria": {"pass": "fae.cerrillos", "role": "user", "name": "Maida Muñoz-Valeria Orellana", "dupla": "Dupla 5"},
+    "marcelo.maria": {"pass": "fae.cerrillos", "role": "user", "name": "Marcelo Huento-María Constanza Correa", "dupla": "Dupla 6"},
+    "solange.francisco": {"pass": "fae.cerrillos", "role": "user", "name": "Solange Alegría-Francisco Carvajal", "dupla": "Dupla 7"}
 }
+# NOTA IMPORTANTE: "dupla" es el ID ESTABLE (Dupla 1, Dupla 2...) al que queda
+# asociado cada usuario y, por lo tanto, sus casos. Si cambia el profesional
+# que integra una dupla, solo se actualiza en "6. Configurar Duplas": los
+# casos NO se tocan porque están vinculados al ID, no al nombre.
 
-# Lista Maestra de Profesionales (Actualizado: Alan Zamora)
-PROF_BASE = sorted([
-    "Bruno Diaz-Casandra Mora", 
-    "Daniela Izquierdo-Paula Leyton", 
-    "Francisca Salazar-Tiare Riquelme", 
-    "Laura Arancibia-Alan Zamora", 
-    "Maida Muñoz-Valeria Orellana", 
-    "Marcelo Huento-María Constanza Correa", 
-    "Solange Alegría-Francisco Carvajal"
-])
+# --- SISTEMA DINÁMICO DE DUPLAS ---
+def cargar_duplas():
+    if os.path.exists(DUPLAS_FILE):
+        return pd.read_csv(DUPLAS_FILE)
+    else:
+        df = pd.DataFrame({
+            "ID_Dupla": ["Dupla 1", "Dupla 2", "Dupla 3", "Dupla 4", "Dupla 5", "Dupla 6", "Dupla 7"],
+            "Integrantes": [
+                "Bruno Diaz-Ignacia Ahumada", 
+                "Daniela Izquierdo-Paula Leyton", 
+                "Francisca Salazar-Tiare Riquelme", 
+                "Laura Arancibia-Alan Zamora", 
+                "Maida Muñoz-Valeria Orellana", 
+                "Marcelo Huento-María Constanza Correa", 
+                "Solange Alegría-Francisco Carvajal"
+            ]
+        })
+        df.to_csv(DUPLAS_FILE, index=False)
+        return df
+
+df_duplas_actual = cargar_duplas()
+PROF_BASE = df_duplas_actual['ID_Dupla'].tolist()
+
+def mapa_duplas_nombres():
+    """Devuelve {ID_Dupla: 'Nombres de los profesionales actuales'} leyendo siempre el CSV vigente."""
+    df_d = cargar_duplas()
+    return dict(zip(df_d['ID_Dupla'], df_d['Integrantes']))
+
+def nombre_actual_dupla(id_dupla):
+    """Dado un ID_Dupla ('Dupla 1'...), devuelve el nombre de quienes la integran hoy."""
+    return mapa_duplas_nombres().get(id_dupla, id_dupla)
+
+def etiqueta_dupla(id_dupla):
+    """Etiqueta amigable para selectboxes: 'Dupla 1 - Nombre Profesional'."""
+    return f"{id_dupla} - {nombre_actual_dupla(id_dupla)}"
+
+def migrar_profesional_a_dupla(df):
+    """
+    Convierte valores antiguos de la columna 'Profesional' (nombres de personas)
+    al ID_Dupla correspondiente ('Dupla 1', 'Dupla 2'...), de modo que los casos
+    queden vinculados a la dupla y no a un nombre puntual. Así, al cambiar los
+    integrantes de una dupla, los casos ya asociados no se ven afectados.
+    """
+    mapa_id_nombre = mapa_duplas_nombres()
+    ids_validos = set(mapa_id_nombre.keys())
+    nombre_a_id = {v: k for k, v in mapa_id_nombre.items()}
+    # Parches de nombres históricos que ya no coinciden con los nombres actuales
+    parches_historicos = {
+        "Bruno Diaz": "Bruno Diaz-Ignacia Ahumada",
+        "Laura Arancibia-Tamara Villegas": "Laura Arancibia-Alan Zamora",
+    }
+    def convertir(valor):
+        valor = str(valor).strip()
+        if valor in ids_validos:
+            return valor
+        valor = parches_historicos.get(valor, valor)
+        return nombre_a_id.get(valor, valor)
+    df['Profesional'] = df['Profesional'].apply(convertir)
+    return df
 
 # Listado Maestro de Informes para Cronogramas
 NOMBRES_TABLA = [
@@ -80,28 +134,22 @@ COLUMNAS_EXTENDIDAS = [
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
-# Auto-login por cookie de 24 horas
 saved_user = cookie_manager.get('fae_login_cookie')
 if saved_user and not st.session_state.logged_in:
     if saved_user in CREDENTIALS:
         st.session_state.logged_in = True
         st.session_state.user_role = CREDENTIALS[saved_user]["role"]
         st.session_state.user_name = CREDENTIALS[saved_user]["name"]
+        st.session_state.user_dupla = CREDENTIALS[saved_user].get("dupla")
 
-if 'user_role' not in st.session_state:
-    st.session_state.user_role = None
-
-if 'user_name' not in st.session_state:
-    st.session_state.user_name = None
-
-if 'caso_seleccionado' not in st.session_state:
-    st.session_state.caso_seleccionado = None
-
-if 'ver_pendientes_ind' not in st.session_state:
-    st.session_state.ver_pendientes_ind = False
+if 'user_role' not in st.session_state: st.session_state.user_role = None
+if 'user_name' not in st.session_state: st.session_state.user_name = None
+if 'user_dupla' not in st.session_state: st.session_state.user_dupla = None
+if 'caso_seleccionado' not in st.session_state: st.session_state.caso_seleccionado = None
+if 'ver_pendientes_ind' not in st.session_state: st.session_state.ver_pendientes_ind = False
 
 # ==============================================================================
-# --- 3. ESTILO CSS MAESTRO (PERSONALIZACIÓN VISUAL) ---
+# --- 3. ESTILO CSS MAESTRO ---
 # ==============================================================================
 st.markdown(f"""
     <style>
@@ -159,6 +207,7 @@ def login_screen():
                     st.session_state.logged_in = True
                     st.session_state.user_role = CREDENTIALS[user]["role"]
                     st.session_state.user_name = CREDENTIALS[user]["name"]
+                    st.session_state.user_dupla = CREDENTIALS[user].get("dupla")
                     cookie_manager.set('fae_login_cookie', user, expires_at=datetime.now() + timedelta(days=1))
                     st.rerun()
                 else:
@@ -169,7 +218,7 @@ if not st.session_state.logged_in:
     st.stop()
 
 # ==============================================================================
-# --- 5. FUNCIONES DE LIMPIEZA GRAMATICAL (MOTOR WORD ORIGINAL) ---
+# --- 5. FUNCIONES DE LIMPIEZA GRAMATICAL ---
 # ==============================================================================
 def limpiar_y_asegurar_unicos(columnas):
     nombres_limpios = []
@@ -185,34 +234,26 @@ def limpiar_y_asegurar_unicos(columnas):
     return nombres_limpios
 
 def corregir_mayusculas(texto, es_nombre=False):
-    if not isinstance(texto, str) or texto == "-":
-        return texto
+    if not isinstance(texto, str) or texto == "-": return texto
     texto = texto.lower().strip()
-    if not texto:
-        return "-"
-    if es_nombre:
-        return texto.title()
+    if not texto: return "-"
+    if es_nombre: return texto.title()
     return re.sub(r'(^|[.!?]\s+)(\w)', lambda m: m.group(1) + m.group(2).upper(), texto)
 
 def limpiar_dato_word(dato, nombre_columna):
-    if isinstance(dato, float) and dato.is_integer():
-        dato = int(dato)
+    if isinstance(dato, float) and dato.is_integer(): dato = int(dato)
     s = str(dato).strip()
-    if s in ['0', '0.0', '00:00:00', 'nan', 'NaT', 'None', '1900-01-01', '01/01/1900']:
-        return "-"
+    if s in ['0', '0.0', '00:00:00', 'nan', 'NaT', 'None', '1900-01-01', '01/01/1900']: return "-"
     if len(s) >= 10 and re.match(r'\d{4}-\d{2}-\d{2}', s):
-        try:
-            return pd.to_datetime(s).strftime('%d/%m/%Y')
-        except:
-            return s
+        try: return pd.to_datetime(s).strftime('%d/%m/%Y')
+        except: return s
     es_col_nombre = any(x in nombre_columna for x in ['nombre', 'apellido', 'paterno', 'materno'])
     return corregir_mayusculas(s, es_nombre=es_col_nombre)
 
 def extraer_objetivo_al_inicio(texto):
     texto = str(texto).strip()
     match = re.match(r'^\((.*?)\)', texto)
-    if match:
-        return corregir_mayusculas(match.group(1).strip())
+    if match: return corregir_mayusculas(match.group(1).strip())
     return "-"
 
 def limpiar_descripcion_original(texto):
@@ -225,15 +266,13 @@ def formatear_fecha_larga(valor):
         dias = {0:"lunes", 1:"martes", 2:"miércoles", 3:"jueves", 4:"viernes", 5:"sábado", 6:"domingo"}
         dt = pd.to_datetime(valor, dayfirst=True)
         return f"{dias[dt.weekday()]}, {dt.day} de {meses[dt.month]} de {dt.year}"
-    except:
-        return valor
+    except: return valor
 
 # ==============================================================================
 # --- 6. FUNCIONES DE DATOS Y EXPORTACIÓN ---
 # ==============================================================================
 def normalizar_texto(texto):
-    if not isinstance(texto, str):
-        return ""
+    if not isinstance(texto, str): return ""
     texto = texto.strip().upper()
     return ''.join(c for c in unicodedata.normalize('NFKD', texto) if unicodedata.category(c) != 'Mn')
 
@@ -241,16 +280,13 @@ def cargar_casos():
     if os.path.exists(CASOS_FILE):
         df = pd.read_csv(CASOS_FILE)
         for col in COLUMNAS_EXTENDIDAS:
-            if col not in df.columns:
-                df[col] = "S/I"
+            if col not in df.columns: df[col] = "S/I"
         df['Caso'] = df['Caso'].astype(str).str.strip()
-        if 'RIT' not in df.columns:
-            df['RIT'] = "S/R"
+        if 'RIT' not in df.columns: df['RIT'] = "S/R"
         df['RIT'] = df['RIT'].astype(str).str.strip()
         df['Fecha Ingreso'] = pd.to_datetime(df['Fecha Ingreso'], errors='coerce').dt.date
         if not df.empty:
-            df['Profesional'] = df['Profesional'].replace("Bruno Diaz", "Bruno Diaz-Casandra Mora")
-            df['Profesional'] = df['Profesional'].replace("Laura Arancibia-Tamara Villegas", "Laura Arancibia-Alan Zamora")
+            df = migrar_profesional_a_dupla(df)
             df.to_csv(CASOS_FILE, index=False)
         return df.dropna(subset=['Caso', 'Fecha Ingreso']).drop_duplicates(subset=['Caso'])
     return pd.DataFrame(columns=["Caso", "RIT", "Profesional", "Fecha Ingreso"] + COLUMNAS_EXTENDIDAS)
@@ -265,12 +301,14 @@ def cargar_entregas():
     return pd.DataFrame(columns=["Caso", "Informe", "Fecha Envio Real"])
 
 def cargar_lista_espera():
-    if os.path.exists(LISTA_ESPERA_FILE):
-        return pd.read_csv(LISTA_ESPERA_FILE)
+    if os.path.exists(LISTA_ESPERA_FILE): return pd.read_csv(LISTA_ESPERA_FILE)
     return pd.DataFrame()
 
 def convertir_a_excel_completo(df_casos_actuales, df_entregas_total):
     output = io.BytesIO()
+    df_casos_actuales = df_casos_actuales.copy()
+    if 'Profesional' in df_casos_actuales.columns:
+        df_casos_actuales['Profesional'] = df_casos_actuales['Profesional'].apply(nombre_actual_dupla)
     if not df_entregas_total.empty:
         df_pivot = df_entregas_total.pivot(index='Caso', columns='Informe', values='Fecha Envio Real')
     else:
@@ -279,8 +317,7 @@ def convertir_a_excel_completo(df_casos_actuales, df_entregas_total):
     df_final = df_casos_actuales.merge(df_pivot, on='Caso', how='left')
     
     for col in NOMBRES_TABLA:
-        if col not in df_final.columns:
-            df_final[col] = None
+        if col not in df_final.columns: df_final[col] = None
             
     cols_base = ["codnino", "Caso", "fechanacimiento", "RIT", "Nacionalidad", "CalidadJuridica", "DireccionNino", "Comuna", "Tribunal", "ConQuienVive", "Profesional", "Fecha Ingreso"]
     cols_orden = [c for c in cols_base if c in df_final.columns] + NOMBRES_TABLA
@@ -302,31 +339,46 @@ def convertir_a_excel_completo(df_casos_actuales, df_entregas_total):
             column = col[0].column_letter
             for cell in col:
                 try:
-                    if len(str(cell.value)) > max_len: 
-                        max_len = len(str(cell.value))
-                except: 
-                    pass
+                    if len(str(cell.value)) > max_len: max_len = len(str(cell.value))
+                except: pass
             ws.column_dimensions[column].width = max_len + 2
     return output.getvalue()
 
-def convertir_a_excel_simple(df):
+def generar_plantilla_carga_masiva():
+    """
+    Genera un Excel de ejemplo con exactamente las mismas columnas que
+    'Carga Masiva (Matriz Maestra)' sabe leer, para usarlo como guía.
+    """
+    columnas = ["Caso", "RIT", "Profesional", "Fecha Ingreso", "codnino", "fechanacimiento",
+                "Nacionalidad", "CalidadJuridica", "DireccionNino", "Comuna", "Tribunal", "ConQuienVive"] + NOMBRES_TABLA
+    fila_ejemplo = {
+        "Caso": "Nombre Apellido (ejemplo, reemplazar)",
+        "RIT": "V-123-2026",
+        "Profesional": PROF_BASE[0] if PROF_BASE else "Dupla 1",
+        "Fecha Ingreso": "01-03-2026",
+        "codnino": "12345",
+        "fechanacimiento": "15-06-2015",
+        "Nacionalidad": "Chilena",
+        "CalidadJuridica": "Medida de Protección",
+        "DireccionNino": "Calle Falsa 123",
+        "Comuna": "Cerrillos",
+        "Tribunal": "1° Juzgado de Familia de Santiago",
+        "ConQuienVive": "Madre",
+        "Evaluación": "05-04-2026"
+    }
+    df_plantilla = pd.DataFrame([fila_ejemplo]).reindex(columns=columnas)
     output = io.BytesIO()
-    df_simple = df[["#", "Caso", "Profesional", "Fecha Ingreso", "RIT"]].copy()
-    df_simple['Fecha Ingreso'] = pd.to_datetime(df_simple['Fecha Ingreso']).dt.strftime('%d-%m-%Y')
-    df_simple = df_simple.rename(columns={"#": "N°", "Fecha Ingreso": "Fecha de Ingreso"})
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_simple.to_excel(writer, index=False, sheet_name='Nomina_FAE')
-        ws = writer.sheets['Nomina_FAE']
+        df_plantilla.to_excel(writer, index=False, sheet_name='Plantilla_Carga')
+        ws = writer.sheets['Plantilla_Carga']
         for col in ws.columns:
             max_len = 0
             column = col[0].column_letter
             for cell in col:
                 try:
-                    if len(str(cell.value)) > max_len: 
-                        max_len = len(str(cell.value))
-                except: 
-                    pass
-            ws.column_dimensions[column].width = max_len + 2
+                    if len(str(cell.value)) > max_len: max_len = len(str(cell.value))
+                except: pass
+            ws.column_dimensions[column].width = max(max_len + 2, 14)
     return output.getvalue()
 
 # ==============================================================================
@@ -439,143 +491,154 @@ def generar_pdf_cronograma(caso_nombre, f_ingreso, df_hitos):
 # ==============================================================================
 # --- 8. BARRA LATERAL (GESTIÓN) ---
 # ==============================================================================
-if st.session_state.user_role == "admin":
-    st.sidebar.header("1. Registrar Nuevo Caso")
-    with st.sidebar.form("nuevo_caso", clear_on_submit=True):
-        n_caso = st.text_input("Nombre del Caso")
-        n_rit = st.text_input("Causa RIT")
-        prof = st.selectbox("Profesional", PROF_BASE)
-        f_ing = st.date_input("Fecha Ingreso", datetime.now())
-        if st.form_submit_button("Guardar Caso") and n_caso:
-            df_c_load = cargar_casos()
-            nuevo = pd.DataFrame([{
-                "Caso": str(n_caso).strip(), 
-                "RIT": str(n_rit).strip(), 
-                "Profesional": prof, 
-                "Fecha Ingreso": f_ing
-            }])
-            pd.concat([df_c_load, nuevo], ignore_index=True).drop_duplicates(subset=['Caso'], keep='last').to_csv(CASOS_FILE, index=False)
-            st.rerun()
-
-    st.sidebar.divider()
-    st.sidebar.header("2. Carga Masiva (Matriz Maestra)")
-    archivo_excel = st.sidebar.file_uploader("Subir Matriz de Carga", type=["xlsx"], key="carga_masiva")
-    modo_reinicio = st.sidebar.checkbox("🚨 MODO REINICIO: Borrar base actual y cargar desde cero")
-    
-    if archivo_excel:
-        try:
-            df_excel = pd.read_excel(archivo_excel)
-            df_excel.columns = [str(c).strip() for c in df_excel.columns]
-            cols_norm = {c.lower(): c for c in df_excel.columns}
-            
-            c_caso = cols_norm.get("caso")
-            c_prof = cols_norm.get("profesional")
-            c_rit = cols_norm.get("rit")
-            c_fecha = cols_norm.get("fecha ingreso") or cols_norm.get("fecha de ingreso")
-            
-            c_codnino = cols_norm.get("codnino")
-            c_nacimiento = cols_norm.get("fechanacimiento")
-            c_nacionalidad = cols_norm.get("nacionalidad")
-            c_calidad = cols_norm.get("calidadjuridica")
-            c_direccion = cols_norm.get("direccionnino")
-            c_comuna = cols_norm.get("comuna")
-            c_tribunal = cols_norm.get("tribunal")
-            c_convive = cols_norm.get("conquienvive")
-            
-            if c_caso and c_prof and c_fecha:
-                if st.sidebar.button("🚀 Sincronizar Matriz Completa"):
-                    if modo_reinicio:
-                        df_c_actual = pd.DataFrame(columns=["Caso", "RIT", "Profesional", "Fecha Ingreso"] + COLUMNAS_EXTENDIDAS)
-                        df_e_actual = pd.DataFrame(columns=["Caso", "Informe", "Fecha Envio Real"])
-                    else:
-                        df_c_actual = cargar_casos()
-                        df_e_actual = cargar_entregas()
-                    
-                    for _, row in df_excel.iterrows():
-                        nombre_c = str(row[c_caso]).strip()
-                        f_ing_val = pd.to_datetime(row[c_fecha], errors='coerce', dayfirst=True).date()
-                        rit_val = str(row[c_rit]).strip() if c_rit else "S/R"
-                        prof_val = str(row[c_prof]).strip()
-                        
-                        meta_vals = {
-                            "codnino": str(row[c_codnino]).strip() if c_codnino and pd.notnull(row[c_codnino]) else "S/I",
-                            "fechanacimiento": str(row[c_nacimiento]).strip() if c_nacimiento and pd.notnull(row[c_nacimiento]) else "S/I",
-                            "Nacionalidad": str(row[c_nacionalidad]).strip() if c_nacionalidad and pd.notnull(row[c_nacionalidad]) else "S/I",
-                            "CalidadJuridica": str(row[c_calidad]).strip() if c_calidad and pd.notnull(row[c_calidad]) else "S/I",
-                            "DireccionNino": str(row[c_direccion]).strip() if c_direccion and pd.notnull(row[c_direccion]) else "S/I",
-                            "Comuna": str(row[c_comuna]).strip() if c_comuna and pd.notnull(row[c_comuna]) else "S/I",
-                            "Tribunal": str(row[c_tribunal]).strip() if c_tribunal and pd.notnull(row[c_tribunal]) else "S/I",
-                            "ConQuienVive": str(row[c_convive]).strip() if c_convive and pd.notnull(row[c_convive]) else "S/I"
-                        }
-                        
-                        mask = df_c_actual['Caso'] == nombre_c
-                        if mask.any():
-                            df_c_actual.loc[mask, ['RIT', 'Fecha Ingreso', 'Profesional'] + list(meta_vals.keys())] = [rit_val, f_ing_val, prof_val] + list(meta_vals.values())
-                        else:
-                            new_row = {"Caso": nombre_c, "RIT": rit_val, "Profesional": prof_val, "Fecha Ingreso": f_ing_val}
-                            new_row.update(meta_vals)
-                            df_c_actual = pd.concat([df_c_actual, pd.DataFrame([new_row])], ignore_index=True)
-                        
-                        for inf in NOMBRES_TABLA:
-                            col_inf = cols_norm.get(inf.lower())
-                            if col_inf and pd.notnull(row[col_inf]):
-                                f_env_val = pd.to_datetime(row[col_inf], errors='coerce', dayfirst=True).date()
-                                if f_env_val:
-                                    df_e_actual = df_e_actual[~((df_e_actual['Caso'] == nombre_c) & (df_e_actual['Informe'] == inf))]
-                                    df_e_actual = pd.concat([df_e_actual, pd.DataFrame([{"Caso": nombre_c, "Informe": inf, "Fecha Envio Real": f_env_val}])], ignore_index=True)
-                    
-                    df_c_actual.to_csv(CASOS_FILE, index=False)
-                    df_e_actual.to_csv(ENTREGAS_FILE, index=False)
-                    st.sidebar.success("¡Matriz sincronizada con éxito!")
-                    st.rerun()
-        except Exception as e: 
-            st.sidebar.error(f"Error: {e}")
-
-st.sidebar.divider()
-st.sidebar.header("3. Registrar Envío")
-df_casos_sidebar = cargar_casos()
-if st.session_state.user_role != "admin":
-    df_casos_sidebar = df_casos_sidebar[df_casos_sidebar['Profesional'] == st.session_state.user_name]
-
-if not df_casos_sidebar.empty:
-    with st.sidebar.form("registrar_envio", clear_on_submit=True):
-        caso_envio = st.selectbox("Selecciona el Caso", sorted(df_casos_sidebar['Caso'].unique()))
-        informe_envio = st.selectbox("¿Qué informe envió?", NOMBRES_TABLA)
-        f_envio = st.date_input("Fecha Real de Envío", datetime.now())
-        if st.form_submit_button("Registrar Envío"):
-            df_e_load = cargar_entregas()
-            df_e_load = df_e_load[~((df_e_load['Caso'] == caso_envio) & (df_e_load['Informe'] == informe_envio))]
-            nuevo_e = pd.DataFrame([{"Caso": caso_envio, "Informe": informe_envio, "Fecha Envio Real": f_envio}])
-            pd.concat([df_e_load, nuevo_e]).to_csv(ENTREGAS_FILE, index=False)
-            st.rerun()
+st.sidebar.title("Menú de Gestión")
 
 if st.session_state.user_role == "admin":
-    st.sidebar.divider()
-    st.sidebar.header("4. 🗑️ Eliminar Caso")
-    if not df_casos_sidebar.empty:
-        lista_borrar = sorted(df_casos_sidebar['Caso'].unique())
-        caso_a_borrar = st.sidebar.selectbox("Caso a eliminar", ["---"] + lista_borrar)
-        if st.sidebar.button("Eliminar permanentemente"):
-            if caso_a_borrar != "---":
-                df_c_nuevo = df_casos_sidebar[df_casos_sidebar['Caso'] != caso_a_borrar]
-                df_c_nuevo.to_csv(CASOS_FILE, index=False)
-                df_e_actual = cargar_entregas()
-                df_e_actual[df_e_actual['Caso'] != caso_a_borrar].to_csv(ENTREGAS_FILE, index=False)
-                st.sidebar.warning(f"Caso '{caso_a_borrar}' eliminado.")
+    with st.sidebar.expander("1. 📝 Registrar Nuevo Caso"):
+        with st.form("nuevo_caso", clear_on_submit=True):
+            n_caso = st.text_input("Nombre del Caso")
+            n_rit = st.text_input("Causa RIT")
+            prof = st.selectbox("Dupla Asignada", PROF_BASE, format_func=etiqueta_dupla)
+            f_ing = st.date_input("Fecha Ingreso", datetime.now())
+            if st.form_submit_button("Guardar Caso") and n_caso:
+                df_c_load = cargar_casos()
+                nuevo = pd.DataFrame([{
+                    "Caso": str(n_caso).strip(), 
+                    "RIT": str(n_rit).strip(), 
+                    "Profesional": prof, 
+                    "Fecha Ingreso": f_ing
+                }])
+                pd.concat([df_c_load, nuevo], ignore_index=True).drop_duplicates(subset=['Caso'], keep='last').to_csv(CASOS_FILE, index=False)
+                st.success("Caso guardado con éxito.")
                 st.rerun()
 
-    st.sidebar.divider()
-    st.sidebar.header("5. 🛠️ Gestión y Corrección")
-    
-    with st.sidebar.expander("📝 Editar Información del Caso"):
+    with st.sidebar.expander("2. 🚀 Carga Masiva (Matriz Maestra)"):
+        st.download_button(
+            label="📥 Descargar Plantilla de Ejemplo",
+            data=generar_plantilla_carga_masiva(),
+            file_name="Plantilla_Carga_Masiva_FAE.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        st.caption("💡 Usa esta plantilla (o la 'Matriz Maestra Completa' del Panel Global) como guía: mismas columnas y formato que se leen al sincronizar.")
+        archivo_excel = st.file_uploader("Subir Matriz de Carga", type=["xlsx"], key="carga_masiva")
+        modo_reinicio = st.checkbox("🚨 MODO REINICIO: Borrar base actual y cargar desde cero")
+        
+        if archivo_excel:
+            try:
+                df_excel = pd.read_excel(archivo_excel)
+                df_excel.columns = [str(c).strip() for c in df_excel.columns]
+                cols_norm = {c.lower(): c for c in df_excel.columns}
+                
+                c_caso = cols_norm.get("caso")
+                c_prof = cols_norm.get("profesional")
+                c_rit = cols_norm.get("rit")
+                c_fecha = cols_norm.get("fecha ingreso") or cols_norm.get("fecha de ingreso")
+                
+                c_codnino = cols_norm.get("codnino")
+                c_nacimiento = cols_norm.get("fechanacimiento")
+                c_nacionalidad = cols_norm.get("nacionalidad")
+                c_calidad = cols_norm.get("calidadjuridica")
+                c_direccion = cols_norm.get("direccionnino")
+                c_comuna = cols_norm.get("comuna")
+                c_tribunal = cols_norm.get("tribunal")
+                c_convive = cols_norm.get("conquienvive")
+                
+                if c_caso and c_prof and c_fecha:
+                    if st.button("🚀 Sincronizar Matriz Completa"):
+                        if modo_reinicio:
+                            df_c_actual = pd.DataFrame(columns=["Caso", "RIT", "Profesional", "Fecha Ingreso"] + COLUMNAS_EXTENDIDAS)
+                            df_e_actual = pd.DataFrame(columns=["Caso", "Informe", "Fecha Envio Real"])
+                        else:
+                            df_c_actual = cargar_casos()
+                            df_e_actual = cargar_entregas()
+                        
+                        mapa_nombre_id = {v: k for k, v in mapa_duplas_nombres().items()}
+                        for _, row in df_excel.iterrows():
+                            nombre_c = str(row[c_caso]).strip()
+                            f_ing_val = pd.to_datetime(row[c_fecha], errors='coerce', dayfirst=True).date()
+                            rit_val = str(row[c_rit]).strip() if c_rit else "S/R"
+                            prof_raw = str(row[c_prof]).strip()
+                            # Acepta tanto el ID de dupla ("Dupla 1") como el nombre de los profesionales
+                            prof_val = prof_raw if prof_raw in PROF_BASE else mapa_nombre_id.get(prof_raw, prof_raw)
+                            
+                            meta_vals = {
+                                "codnino": str(row[c_codnino]).strip() if c_codnino and pd.notnull(row[c_codnino]) else "S/I",
+                                "fechanacimiento": str(row[c_nacimiento]).strip() if c_nacimiento and pd.notnull(row[c_nacimiento]) else "S/I",
+                                "Nacionalidad": str(row[c_nacionalidad]).strip() if c_nacionalidad and pd.notnull(row[c_nacionalidad]) else "S/I",
+                                "CalidadJuridica": str(row[c_calidad]).strip() if c_calidad and pd.notnull(row[c_calidad]) else "S/I",
+                                "DireccionNino": str(row[c_direccion]).strip() if c_direccion and pd.notnull(row[c_direccion]) else "S/I",
+                                "Comuna": str(row[c_comuna]).strip() if c_comuna and pd.notnull(row[c_comuna]) else "S/I",
+                                "Tribunal": str(row[c_tribunal]).strip() if c_tribunal and pd.notnull(row[c_tribunal]) else "S/I",
+                                "ConQuienVive": str(row[c_convive]).strip() if c_convive and pd.notnull(row[c_convive]) else "S/I"
+                            }
+                            
+                            mask = df_c_actual['Caso'] == nombre_c
+                            if mask.any():
+                                df_c_actual.loc[mask, ['RIT', 'Fecha Ingreso', 'Profesional'] + list(meta_vals.keys())] = [rit_val, f_ing_val, prof_val] + list(meta_vals.values())
+                            else:
+                                new_row = {"Caso": nombre_c, "RIT": rit_val, "Profesional": prof_val, "Fecha Ingreso": f_ing_val}
+                                new_row.update(meta_vals)
+                                df_c_actual = pd.concat([df_c_actual, pd.DataFrame([new_row])], ignore_index=True)
+                            
+                            for inf in NOMBRES_TABLA:
+                                col_inf = cols_norm.get(inf.lower())
+                                if col_inf and pd.notnull(row[col_inf]):
+                                    f_env_val = pd.to_datetime(row[col_inf], errors='coerce', dayfirst=True).date()
+                                    if f_env_val:
+                                        df_e_actual = df_e_actual[~((df_e_actual['Caso'] == nombre_c) & (df_e_actual['Informe'] == inf))]
+                                        df_e_actual = pd.concat([df_e_actual, pd.DataFrame([{"Caso": nombre_c, "Informe": inf, "Fecha Envio Real": f_env_val}])], ignore_index=True)
+                        
+                        df_c_actual.to_csv(CASOS_FILE, index=False)
+                        df_e_actual.to_csv(ENTREGAS_FILE, index=False)
+                        st.success("¡Matriz sincronizada con éxito!")
+                        st.rerun()
+            except Exception as e: 
+                st.error(f"Error: {e}")
+
+df_casos_sidebar = cargar_casos()
+if st.session_state.user_role != "admin":
+    df_casos_sidebar = df_casos_sidebar[df_casos_sidebar['Profesional'] == st.session_state.user_dupla]
+
+with st.sidebar.expander("3. 📤 Registrar Envío"):
+    if not df_casos_sidebar.empty:
+        with st.form("registrar_envio", clear_on_submit=True):
+            caso_envio = st.selectbox("Selecciona el Caso", sorted(df_casos_sidebar['Caso'].unique()))
+            informe_envio = st.selectbox("¿Qué informe envió?", NOMBRES_TABLA)
+            f_envio = st.date_input("Fecha Real de Envío", datetime.now())
+            if st.form_submit_button("Registrar Envío"):
+                df_e_load = cargar_entregas()
+                df_e_load = df_e_load[~((df_e_load['Caso'] == caso_envio) & (df_e_load['Informe'] == informe_envio))]
+                nuevo_e = pd.DataFrame([{"Caso": caso_envio, "Informe": informe_envio, "Fecha Envio Real": f_envio}])
+                pd.concat([df_e_load, nuevo_e]).to_csv(ENTREGAS_FILE, index=False)
+                st.success("Envío registrado.")
+                st.rerun()
+    else:
+        st.info("No tienes casos registrados aún.")
+
+if st.session_state.user_role == "admin":
+    with st.sidebar.expander("4. 🗑️ Eliminar Caso"):
         if not df_casos_sidebar.empty:
-            caso_a_editar = st.selectbox("Selecciona caso para editar", ["---"] + sorted(df_casos_sidebar['Caso'].unique()))
+            lista_borrar = sorted(df_casos_sidebar['Caso'].unique())
+            caso_a_borrar = st.selectbox("Caso a eliminar", ["---"] + lista_borrar)
+            if st.button("Eliminar permanentemente"):
+                if caso_a_borrar != "---":
+                    df_c_nuevo = df_casos_sidebar[df_casos_sidebar['Caso'] != caso_a_borrar]
+                    df_c_nuevo.to_csv(CASOS_FILE, index=False)
+                    df_e_actual = cargar_entregas()
+                    df_e_actual[df_e_actual['Caso'] != caso_a_borrar].to_csv(ENTREGAS_FILE, index=False)
+                    st.warning(f"Caso '{caso_a_borrar}' eliminado.")
+                    st.rerun()
+
+    with st.sidebar.expander("5. 🛠️ Gestión y Corrección"):
+        st.markdown("**📝 Editar Información del Caso**")
+        if not df_casos_sidebar.empty:
+            caso_a_editar = st.selectbox("Selecciona caso para editar", ["---"] + sorted(df_casos_sidebar['Caso'].unique()), key="edit_caso")
             if caso_a_editar != "---":
                 datos_actuales = df_casos_sidebar[df_casos_sidebar['Caso'] == caso_a_editar].iloc[0]
                 with st.form("form_unificado_editar"):
                     nuevo_nombre_c = st.text_input("Nombre del Caso", caso_a_editar)
                     nuevo_rit = st.text_input("Causa RIT", datos_actuales['RIT'])
-                    nuevo_prof = st.selectbox("Profesional", PROF_BASE, index=PROF_BASE.index(datos_actuales['Profesional']) if datos_actuales['Profesional'] in PROF_BASE else 0)
+                    nuevo_prof = st.selectbox("Dupla Asignada", PROF_BASE, index=PROF_BASE.index(datos_actuales['Profesional']) if datos_actuales['Profesional'] in PROF_BASE else 0, format_func=etiqueta_dupla)
                     nueva_fecha_ing = st.date_input("Fecha Ingreso", datos_actuales['Fecha Ingreso'])
                     
                     if st.form_submit_button("Guardar Cambios"):
@@ -590,43 +653,60 @@ if st.session_state.user_role == "admin":
                         st.success("Información actualizada correctamente.")
                         st.rerun()
 
-    with st.sidebar.expander("📅 Corregir/Eliminar Fecha de Informe"):
+        st.divider()
+        st.markdown("**📅 Corregir/Eliminar Fecha de Informe**")
         df_e_corr = cargar_entregas()
         if not df_e_corr.empty:
             caso_f_corr = st.selectbox("Selecciona Caso", sorted(df_e_corr['Caso'].unique()), key="corr_f_c")
             informes_enviados = df_e_corr[df_e_corr['Caso'] == caso_f_corr]['Informe'].unique()
-            inf_a_corr = st.selectbox("Informe a gestionar", informes_enviados)
-            fecha_actual = df_e_corr[(df_e_corr['Caso'] == caso_f_corr) & (df_e_corr['Informe'] == inf_a_corr)]['Fecha Envio Real'].iloc[0]
-            nueva_f_corr = st.date_input("Nueva Fecha Real", fecha_actual)
-            
-            c_upd, c_del = st.columns(2)
-            with c_upd:
-                if st.button("Actualizar Fecha"):
-                    df_e_corr.loc[(df_e_corr['Caso'] == caso_f_corr) & (df_e_corr['Informe'] == inf_a_corr), 'Fecha Envio Real'] = nueva_f_corr
-                    df_e_corr.to_csv(ENTREGAS_FILE, index=False)
-                    st.success("Fecha actualizada.")
-                    st.rerun()
-            with c_del:
-                if st.button("🗑️ Eliminar Informe"):
-                    df_e_nuevo = df_e_corr[~((df_e_corr['Caso'] == caso_f_corr) & (df_e_corr['Informe'] == inf_a_corr))]
-                    df_e_nuevo.to_csv(ENTREGAS_FILE, index=False)
-                    st.warning("Registro eliminado.")
-                    st.rerun()
+            if len(informes_enviados) > 0:
+                inf_a_corr = st.selectbox("Informe a gestionar", informes_enviados)
+                fecha_actual = df_e_corr[(df_e_corr['Caso'] == caso_f_corr) & (df_e_corr['Informe'] == inf_a_corr)]['Fecha Envio Real'].iloc[0]
+                nueva_f_corr = st.date_input("Nueva Fecha Real", fecha_actual)
+                
+                c_upd, c_del = st.columns(2)
+                with c_upd:
+                    if st.button("Actualizar Fecha"):
+                        df_e_corr.loc[(df_e_corr['Caso'] == caso_f_corr) & (df_e_corr['Informe'] == inf_a_corr), 'Fecha Envio Real'] = nueva_f_corr
+                        df_e_corr.to_csv(ENTREGAS_FILE, index=False)
+                        st.success("Fecha actualizada.")
+                        st.rerun()
+                with c_del:
+                    if st.button("🗑️ Eliminar Informe"):
+                        df_e_nuevo = df_e_corr[~((df_e_corr['Caso'] == caso_f_corr) & (df_e_corr['Informe'] == inf_a_corr))]
+                        df_e_nuevo.to_csv(ENTREGAS_FILE, index=False)
+                        st.warning("Registro eliminado.")
+                        st.rerun()
 
-    st.sidebar.divider()
-    st.sidebar.header("6. ⏳ Cargar Lista de Espera")
-    archivo_espera = st.sidebar.file_uploader("Subir Excel Lista Espera", type=["xlsx"])
-    if archivo_espera:
-        try:
-            df_espera_raw = pd.read_excel(archivo_espera)
-            cols_interes = ["Nombres", "Apellido_Paterno", "Apellido_Materno", "FechaNacimiento", "Rut", "FechaIngresoLE", "Tribunal", "RIT", "FechaOrden", "ComunaNiño_a"]
-            df_espera_filtrado = df_espera_raw[[c for c in cols_interes if c in df_espera_raw.columns]]
-            if st.sidebar.button("🔄 Actualizar Lista de Espera"):
-                df_espera_filtrado.to_csv(LISTA_ESPERA_FILE, index=False)
-                st.sidebar.success("Lista de espera actualizada.")
+    with st.sidebar.expander("6. ⚙️ Configurar Duplas"):
+        df_edit_duplas = cargar_duplas()
+        with st.form("form_editar_duplas"):
+            dupla_a_editar = st.selectbox("Selecciona la Dupla", df_edit_duplas['ID_Dupla'].tolist())
+            nombre_actual = df_edit_duplas.loc[df_edit_duplas['ID_Dupla'] == dupla_a_editar, 'Integrantes'].values[0]
+            nuevos_integrantes = st.text_input("Nombres de los profesionales", nombre_actual)
+            
+            if st.form_submit_button("Actualizar Dupla"):
+                df_edit_duplas.loc[df_edit_duplas['ID_Dupla'] == dupla_a_editar, 'Integrantes'] = nuevos_integrantes
+                df_edit_duplas.to_csv(DUPLAS_FILE, index=False)
+                # Los casos están asociados al ID de la dupla (ej. "Dupla 1"), no al nombre
+                # de sus integrantes, así que no es necesario tocar casos.csv: todos los
+                # casos de esta dupla quedan automáticamente con el nuevo profesional.
+                st.success(f"{dupla_a_editar} actualizada correctamente. Los casos ya asociados a esta dupla mantienen el vínculo automáticamente, sin importar quién la integre.")
                 st.rerun()
-        except Exception as e: 
-            st.sidebar.error(f"Error al procesar lista de espera: {e}")
+
+    with st.sidebar.expander("7. ⏳ Cargar Lista de Espera"):
+        archivo_espera = st.file_uploader("Subir Excel Lista Espera", type=["xlsx"])
+        if archivo_espera:
+            try:
+                df_espera_raw = pd.read_excel(archivo_espera)
+                cols_interes = ["Nombres", "Apellido_Paterno", "Apellido_Materno", "FechaNacimiento", "Rut", "FechaIngresoLE", "Tribunal", "RIT", "FechaOrden", "ComunaNiño_a"]
+                df_espera_filtrado = df_espera_raw[[c for c in cols_interes if c in df_espera_raw.columns]]
+                if st.button("🔄 Actualizar Lista de Espera"):
+                    df_espera_filtrado.to_csv(LISTA_ESPERA_FILE, index=False)
+                    st.success("Lista de espera actualizada.")
+                    st.rerun()
+            except Exception as e: 
+                st.error(f"Error al procesar lista de espera: {e}")
 
 st.sidebar.divider()
 if st.sidebar.button("🚪 Cerrar Sesión"):
@@ -643,8 +723,8 @@ df_e = cargar_entregas()
 if not df_c.empty:
     hoy = datetime.now().date()
     
-    st.markdown("<h1 style='text-align: center; color: black; margin-bottom: 0;'>SCG Digital  FAE</h1>", unsafe_allow_html=True)
-    st.markdown(f"<h3 style='text-align: center; color: {COLOR_GRIS_PIZARRA}; margin-top: 0;'>Control de Plazos y Automatización</h3>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: black; margin-bottom: 0;'>Ecosistema Digital FAE DEM Cerrillos</h1>", unsafe_allow_html=True)
+    st.markdown(f"<h3 style='text-align: center; color: {COLOR_GRIS_PIZARRA}; margin-top: 0;'>Control de Plazos y Automatización Institucional</h3>", unsafe_allow_html=True)
     st.divider()
 
     if st.session_state.user_role == "admin":
@@ -656,11 +736,11 @@ if not df_c.empty:
     with tab_ind:
         st.subheader("🔍 Consulta por Profesional")
         if st.session_state.user_role == "admin":
-            lista_profs_f = sorted(df_c['Profesional'].unique())
-            prof_sel = st.selectbox("Selecciona Profesional:", lista_profs_f, key="prof_sel_ind")
+            lista_duplas_f = sorted(df_c['Profesional'].unique(), key=lambda x: PROF_BASE.index(x) if x in PROF_BASE else 999)
+            prof_sel = st.selectbox("Selecciona Dupla:", lista_duplas_f, format_func=etiqueta_dupla, key="prof_sel_ind")
         else:
-            prof_sel = st.session_state.user_name
-            st.info(f"Visualizando casos de: **{prof_sel}**")
+            prof_sel = st.session_state.user_dupla
+            st.info(f"Visualizando casos de: **{etiqueta_dupla(prof_sel)}**")
             
         df_c_filtrado = df_c[df_c['Profesional'] == prof_sel]
 
@@ -707,15 +787,29 @@ if not df_c.empty:
                                    },
                                    color_discrete_map={"Días desde último envío": COLOR_VERDE_IRIDEM, "días desde ingreso (Diagnóstico)": COLOR_GRIS_IRIDEM})
                 fig_barras.add_hline(y=90, line_color="#ff7f7f", line_width=2)
+                fig_barras.add_hline(y=80, line_color="#f5b041", line_width=2, line_dash="dash")
+
+                # Etiquetas de las líneas de límite, ubicadas después del término de la línea (fuera del área de barras)
+                fig_barras.add_annotation(
+                    xref="paper", x=1.01, y=90, xanchor="left", yanchor="middle",
+                    text="Límite (90 días)", showarrow=False,
+                    font=dict(size=11, color="#ff7f7f")
+                )
+                fig_barras.add_annotation(
+                    xref="paper", x=1.01, y=80, xanchor="left", yanchor="middle",
+                    text="Alerta (80 días)", showarrow=False,
+                    font=dict(size=11, color="#f5b041")
+                )
                 
                 fig_barras.update_layout(
                     xaxis_tickangle=-45, 
                     height=400, 
-                    margin=dict(t=30, b=100, l=50, r=10), 
+                    margin=dict(t=30, b=100, l=50, r=150), 
                     yaxis_range=[0, max_y], 
                     paper_bgcolor='rgba(0,0,0,0)', 
                     plot_bgcolor='rgba(0,0,0,0)',
-                    xaxis=dict(automargin=True)
+                    xaxis=dict(automargin=True),
+                    legend=dict(orientation="v", x=1.01, xanchor="left", y=max(80/max_y - 0.1, 0.05), yanchor="top")
                 )
                 fig_barras.update_traces(textposition='outside', textfont_size=11, textfont_weight="bold")
                 
@@ -779,7 +873,7 @@ if not df_c.empty:
                     st.markdown('</div>', unsafe_allow_html=True)
 
             if st.session_state.ver_pendientes_ind and no_cumple_count > 0:
-                st.warning(f"⚠️ Casos Fuera de Plazo: {prof_sel}")
+                st.warning(f"⚠️ Casos Fuera de Plazo: {etiqueta_dupla(prof_sel)}")
                 st.dataframe(pd.DataFrame(detalles_pendientes_ind), use_container_width=True, hide_index=True)
 
             st.divider()
@@ -898,13 +992,27 @@ if not df_c.empty:
                 df_ing_vista = df_maestro_vista[["Caso", "Próximo Informe", "F. Límite (Teo)", "Días", "Estado (Ingreso)"]].rename(columns={"F. Límite (Teo)": "Fecha Límite (Ingreso)", "Días": "Días Restantes", "Estado (Ingreso)": "Estado Ingreso"})
                 st.dataframe(df_ing_vista.style.map(lambda v: 'color: #d63031; font-weight: bold' if "🔴" in str(v) else '', subset=['Estado Ingreso']), use_container_width=True, hide_index=True)
 
-                pdf_bytes = generar_pdf_visual(prof_sel, df_maestro_vista, data_grafico_barras, cumple_count, no_cumple_count)
+                pdf_bytes = generar_pdf_visual(etiqueta_dupla(prof_sel), df_maestro_vista, data_grafico_barras, cumple_count, no_cumple_count)
                 st.download_button(label="📥 Descargar Reporte PDF Ejecutivo", data=pdf_bytes, file_name=f"Reporte_{prof_sel}.pdf", mime="application/pdf")
 
     # --- TAB 2: PANEL GLOBAL (ADMIN) ---
     if st.session_state.user_role == "admin":
         with tab_global:
             st.subheader("🌎 Estado Global")
+
+            if 'ver_duplas_global' not in st.session_state: st.session_state.ver_duplas_global = False
+            if st.button("👥 Ver Duplas y Profesionales Asociados", key="btn_ver_duplas_global"):
+                st.session_state.ver_duplas_global = not st.session_state.ver_duplas_global
+
+            if st.session_state.ver_duplas_global:
+                df_duplas_vista = cargar_duplas().copy()
+                conteo_casos = df_c['Profesional'].value_counts()
+                df_duplas_vista['N° Casos Asociados'] = df_duplas_vista['ID_Dupla'].map(conteo_casos).fillna(0).astype(int)
+                df_duplas_vista = df_duplas_vista.rename(columns={"ID_Dupla": "Dupla", "Integrantes": "Profesionales Asociados"})
+                st.dataframe(df_duplas_vista, use_container_width=True, hide_index=True)
+                st.caption("💡 Estas son las duplas activas y quiénes las integran hoy. Puedes cambiar los nombres en '6. ⚙️ Configurar Duplas' sin afectar los casos ya asignados.")
+                st.divider()
+
             global_cumple, global_atraso = 0, 0
             data_profesionales = []
             resumen_global_maestro = [] 
@@ -966,15 +1074,59 @@ if not df_c.empty:
             c1.metric("Total Casos", global_cumple + global_atraso)
             c2.metric("Cumplimiento Global", f"{(global_cumple/(global_cumple + global_atraso))*100:.1f}%" if (global_cumple + global_atraso) > 0 else "0%")
             c3.metric("Casos Fuera de Plazo", global_atraso)
-            
+
+            # --- BOTÓN: TODOS LOS INFORMES PENDIENTES DEL PROGRAMA ---
+            if 'ver_pendientes_global' not in st.session_state: st.session_state.ver_pendientes_global = False
+            df_pendientes_global_btn = pd.DataFrame(resumen_global_maestro)
+            df_pendientes_global_btn = df_pendientes_global_btn[df_pendientes_global_btn['Estado (Operativo)'] == "🔴 VENCIDO"] if not df_pendientes_global_btn.empty else df_pendientes_global_btn
+
+            if st.button(f"⚠️ Ver los {len(df_pendientes_global_btn)} informes pendientes en todo el programa", key="btn_pend_global", use_container_width=True):
+                st.session_state.ver_pendientes_global = not st.session_state.ver_pendientes_global
+
+            if st.session_state.ver_pendientes_global:
+                if not df_pendientes_global_btn.empty:
+                    df_pend_vista = df_pendientes_global_btn.copy()
+                    df_pend_vista['Profesional'] = df_pend_vista['Profesional'].apply(nombre_actual_dupla)
+                    st.warning(f"⚠️ Informes pendientes (vencidos) en todo el programa: {len(df_pend_vista)}")
+                    st.dataframe(
+                        df_pend_vista[["Caso", "RIT", "Profesional", "Próximo Informe", "Venc. (3m)", "Meses"]],
+                        use_container_width=True, hide_index=True
+                    )
+                else:
+                    st.success("No hay informes pendientes vencidos en todo el programa.")
+
             st.divider()
             col_g1, col_g2 = st.columns([2, 1])
             df_global_plot = pd.DataFrame(data_profesionales)
+            df_global_plot['Profesional_Nombre'] = df_global_plot['Profesional'].apply(nombre_actual_dupla)
+            df_global_plot['Total'] = df_global_plot['Al día'] + df_global_plot['Fuera de plazo']
+
             with col_g1:
                 fig_comp = px.bar(df_global_plot, x="Profesional", y=["Al día", "Fuera de plazo"], 
                                   color_discrete_map={"Al día": COLOR_VERDE_IRIDEM, "Fuera de plazo": COLOR_GRIS_IRIDEM}, 
-                                  barmode="group", text_auto=True)
-                fig_comp.update_layout(xaxis_tickangle=-45, height=420, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+                                  barmode="group", text_auto=True,
+                                  custom_data=["Profesional_Nombre", "Total"])
+
+                fig_comp.update_traces(
+                    hovertemplate="<b>%{customdata[0]}</b><br>%{y} casos<extra></extra>"
+                )
+
+                # Anotación con el total de casos, todas a la misma altura (por encima de la barra más alta)
+                techo_global = df_global_plot[["Al día", "Fuera de plazo"]].values.max()
+                for i, row in df_global_plot.iterrows():
+                    fig_comp.add_annotation(
+                        x=row["Profesional"], y=techo_global,
+                        text=f"Total: {int(row['Total'])}",
+                        showarrow=False, yshift=25,
+                        font=dict(size=11, color=COLOR_GRIS_IRIDEM)
+                    )
+
+                fig_comp.update_layout(
+                    xaxis_tickangle=-45, height=300,
+                    margin=dict(t=40, b=90),
+                    yaxis_range=[0, techo_global * 1.3],
+                    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
+                )
                 
                 evento_global = st.plotly_chart(fig_comp, use_container_width=True, on_select="rerun")
                 
@@ -984,7 +1136,7 @@ if not df_c.empty:
                     serie_clic = punto.get('legendgroup')
                     
                     if serie_clic == "Fuera de plazo":
-                        st.warning(f"⚠️ Casos Fuera de Plazo: {prof_clic}")
+                        st.warning(f"⚠️ Casos Fuera de Plazo: {etiqueta_dupla(prof_clic)}")
                         df_maestro_global = pd.DataFrame(resumen_global_maestro)
                         casos_vencidos = df_maestro_global[(df_maestro_global['Profesional'] == prof_clic) & 
                                                            (df_maestro_global['Estado (Operativo)'] == "🔴 VENCIDO")]
@@ -1043,7 +1195,7 @@ if not df_c.empty:
                                 <b>🏛️ Tribunal:</b> {info_c.get('Tribunal', 'S/I')}<br>
                                 <b>📍 Comuna:</b> {info_c.get('Comuna', 'S/I')}<br>
                                 <b>🗺️ Dirección:</b> {info_c.get('DireccionNino', 'S/I')}<br>
-                                <b>🤝 Profesional / Dupla:</b> {info_c['Profesional']}<br>
+                                <b>🤝 Profesional / Dupla:</b> {etiqueta_dupla(info_c['Profesional'])}<br>
                                 <b>⏱️ Antigüedad:</b> {info_c['Meses']} meses | <b>Próx. Inf:</b> {info_c['Próximo Informe']} ({info_c['F. Límite (Teo)']})
                             </div>
                         </div>
@@ -1053,8 +1205,8 @@ if not df_c.empty:
             # --- LISTA MAESTRA ---
             st.divider()
             st.subheader("📋 Detalle de Casos por Profesional")
-            opciones_global = ["--- TODOS LOS CASOS (LISTA MAESTRA) ---", "--- VENCIDOS POR 3 MESES (OPERATIVO) ---"] + sorted(df_c['Profesional'].unique())
-            prof_global_sel = st.selectbox("Selecciona Profesional/Dupla para ver sus casos:", opciones_global, key="prof_global_sel")
+            opciones_global = ["--- TODOS LOS CASOS (LISTA MAESTRA) ---", "--- VENCIDOS POR 3 MESES (OPERATIVO) ---"] + sorted(df_c['Profesional'].unique(), key=lambda x: PROF_BASE.index(x) if x in PROF_BASE else 999)
+            prof_global_sel = st.selectbox("Selecciona Profesional/Dupla para ver sus casos:", opciones_global, format_func=lambda x: etiqueta_dupla(x) if x in PROF_BASE else x, key="prof_global_sel")
             
             df_res_global = df_maestro_search.copy()
             if prof_global_sel == "--- VENCIDOS POR 3 MESES (OPERATIVO) ---":
@@ -1064,13 +1216,16 @@ if not df_c.empty:
             
             df_res_global['#'] = range(1, len(df_res_global) + 1)
 
+            col_ex1, col_ex2 = st.columns(2)
+            with col_ex1:
+                excel_completo = convertir_a_excel_completo(df_c if prof_global_sel == "--- TODOS LOS CASOS (LISTA MAESTRA) ---" else df_c[df_c['Profesional'] == prof_global_sel], df_e)
+                st.download_button(label="📥 Descargar Matriz Maestra Completa (Excel)", data=excel_completo, file_name=f"Matriz_Completa_FAE.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                st.caption("💡 Este archivo usa el mismo formato que exige la Carga Masiva: puedes editarlo y volver a subirlo tal cual para actualizar datos.")
+
             if not df_res_global.empty:
-                col_ex1, col_ex2 = st.columns(2)
-                with col_ex1:
-                    excel_completo = convertir_a_excel_completo(df_c if prof_global_sel == "--- TODOS LOS CASOS (LISTA MAESTRA) ---" else df_c[df_c['Profesional'] == prof_global_sel], df_e)
-                    st.download_button(label="📥 Descargar Matriz Maestra Completa (Excel)", data=excel_completo, file_name=f"Matriz_Completa_FAE.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                 with col_ex2:
                     df_nom_simple = df_res_global[["#", "Caso", "Profesional", "Fecha Ingreso", "RIT"]].copy()
+                    df_nom_simple['Profesional'] = df_nom_simple['Profesional'].apply(nombre_actual_dupla)
                     df_nom_simple['Fecha Ingreso'] = pd.to_datetime(df_nom_simple['Fecha Ingreso']).dt.strftime('%d-%m-%Y')
                     output_s = io.BytesIO()
                     with pd.ExcelWriter(output_s, engine='openpyxl') as writer:
@@ -1086,7 +1241,9 @@ if not df_c.empty:
                             ws.column_dimensions[column].width = max_len + 2
                     st.download_button(label="📋 Descargar Nómina Simple (Excel)", data=output_s.getvalue(), file_name=f"Nomina_Simple.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                 
-                st.dataframe(df_res_global.style.map(lambda v: 'color: #d63031; font-weight: bold' if "🔴" in str(v) else '', subset=['Estado (Ingreso)', 'Estado (Operativo)']), use_container_width=True, hide_index=True, column_config={"#": st.column_config.Column(width="small", alignment="center"), "Caso": st.column_config.Column(width="medium"), "RIT": st.column_config.Column(width="small", alignment="center"), "Profesional": st.column_config.Column(width="medium"), "Próximo Informe": st.column_config.Column(width="small", alignment="center"), "F. Límite (Teo)": st.column_config.Column(width="small", alignment="center"), "Días": st.column_config.Column(width="small", alignment="center"), "Estado (Ingreso)": st.column_config.Column(width="small", alignment="center"), "Venc. (3m)": st.column_config.Column(width="small", alignment="center"), "Estado (Operativo)": st.column_config.Column(width="small", alignment="center"), "Meses": st.column_config.Column(width="small", alignment="center")})
+                df_res_global_vista = df_res_global.copy()
+                df_res_global_vista['Profesional'] = df_res_global_vista['Profesional'].apply(nombre_actual_dupla)
+                st.dataframe(df_res_global_vista.style.map(lambda v: 'color: #d63031; font-weight: bold' if "🔴" in str(v) else '', subset=['Estado (Ingreso)', 'Estado (Operativo)']), use_container_width=True, hide_index=True, column_config={"#": st.column_config.Column(width="small", alignment="center"), "Caso": st.column_config.Column(width="medium"), "RIT": st.column_config.Column(width="small", alignment="center"), "Profesional": st.column_config.Column(width="medium"), "Próximo Informe": st.column_config.Column(width="small", alignment="center"), "F. Límite (Teo)": st.column_config.Column(width="small", alignment="center"), "Días": st.column_config.Column(width="small", alignment="center"), "Estado (Ingreso)": st.column_config.Column(width="small", alignment="center"), "Venc. (3m)": st.column_config.Column(width="small", alignment="center"), "Estado (Operativo)": st.column_config.Column(width="small", alignment="center"), "Meses": st.column_config.Column(width="small", alignment="center")})
 
     # --- TAB 3: LISTA DE ESPERA (ADMIN) ---
     if st.session_state.user_role == "admin":
